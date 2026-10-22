@@ -240,7 +240,7 @@ function normalise(list) {
     if (!player || !raw.game) continue;
     let rounds = raw.rounds;
     if (typeof rounds === 'string') { try { rounds = JSON.parse(rounds); } catch { rounds = []; } }
-    const e = { player, game: +raw.game, date: String(raw.date).slice(0, 10), score: +raw.score, rounds: Array.isArray(rounds) ? rounds : [], submitted: raw.submitted || '' };
+    const e = { player, game: +raw.game, date: toIso(raw.date), score: +raw.score, rounds: Array.isArray(rounds) ? rounds : [], submitted: raw.submitted || '' };
     out.push(e);
   }
   // most recent spelling of a name wins
@@ -251,6 +251,19 @@ function normalise(list) {
 }
 
 // ---------- dates ----------
+// Sheets sometimes hands dates back as "Thu Oct 22 2026 00:00:00 GMT..." instead of "2026-10-22".
+const MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+function toIso(v) {
+  const s = String(v ?? '').trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^\w{3},? (\w{3}) (\d{1,2}) (\d{4})/);
+  if (m && MONTHS[m[1]]) return `${m[3]}-${String(MONTHS[m[1]]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const d = new Date(s);
+  return isNaN(d) ? s : isoLocal(d);
+}
 function isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function nice(dateIso, withDay = true) {
   const d = new Date(dateIso + 'T00:00:00');
