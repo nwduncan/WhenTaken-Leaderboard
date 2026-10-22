@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhenTaken Leaderboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f4f2ee; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e0da;
+  --accent: #c2410c; --accent-soft: #fde7d9; --good: #15803d; --gold: #c99a06; --silver: #8a8f98; --bronze: #a8653a;
+  --heat-lo: #f3d9cf; --heat-hi: #2f855a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514; --card: #1f1f1d; --ink: #ecebe7; --muted: #9b9a95; --line: #33322f;
+    --accent: #fb923c; --accent-soft: #3a2416; --good: #4ade80; --heat-lo: #4a2a22; --heat-hi: #2f855a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 28px 16px 8px; max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+header h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+header .sub { color: var(--muted); }
+main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 48px; display: grid; gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+.card h2 { margin: 0 0 12px; font-size: 17px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.card h2 .spacer { flex: 1; }
+.grid2 { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+input, select, textarea, button { font: inherit; color: inherit; }
+input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+textarea { min-height: 170px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+select.inline { width: auto; padding: 5px 8px; font-size: 14px; }
+button { border: 0; border-radius: 8px; padding: 9px 16px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; padding: 6px 12px; }
+button.x { background: transparent; color: var(--muted); padding: 2px 6px; font-size: 16px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.msg { font-size: 14px; color: var(--muted); }
+.msg.err { color: #dc2626; } .msg.ok { color: var(--good); }
+.banner { background: var(--accent-soft); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+tr.ineligible td { color: var(--muted); }
+td.rank { width: 32px; color: var(--muted); }
+.medal1 { color: var(--gold); } .medal2 { color: var(--silver); } .medal3 { color: var(--bronze); }
+.hl { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.stat { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.stat .d { font-size: 12px; color: var(--muted); }
+.chips { display: inline-flex; gap: 3px; }
+.chip { display: inline-block; min-width: 34px; text-align: center; border-radius: 5px; padding: 1px 4px; font-size: 12px; background: var(--bg); }
+.chip.g { background: #f7e7a6; color: #5c4600; } .chip.s { background: #e3e5e9; color: #3b3f46; } .chip.b { background: #f0d2bd; color: #5e3215; }
+.heat td.cell { text-align: center; font-variant-numeric: tabular-nums; min-width: 52px; }
+.heat td.miss { color: var(--muted); opacity: .5; }
+.chartbox { position: relative; height: 300px; }
+.empty { color: var(--muted); padding: 12px 0; }
+footer { text-align: center; color: var(--muted); font-size: 13px; padding-bottom: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>WhenTaken Leaderboard</h1>
+  <span class="sub" id="subtitle">Loading…</span>
+</header>
+
+<main>
+  <div id="modeBanner" class="banner" hidden></div>
+
+  <section class="card">
+    <h2>Add your score</h2>
+    <div class="grid2">
+      <div>
+        <label for="name">Your name</label>
+        <input id="name" list="players" autocomplete="off" placeholder="e.g. Nathan">
+        <datalist id="players"></datalist>
+        <div style="margin-top:10px">
+          <label for="paste">Paste your result (you can paste several days at once)</label>
+          <textarea id="paste" placeholder="#WhenTaken #968 (22.10.2026)&#10;&#10;I scored 849/1000🏅&#10;..."></textarea>
+        </div>
+        <div class="row">
+          <button id="submit" disabled>Submit</button>
+          <span id="submitMsg" class="msg"></span>
+        </div>
+      </div>
+      <div>
+        <label>Preview</label>
+        <div id="preview" class="msg">Paste a result to see what will be saved.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Leaderboard <span class="spacer"></span>
+      <select id="period" class="inline">
+        <option value="week">This week</option>
+        <option value="month" selected>This month</option>
+        <option value="lastmonth">Last month</option>
+        <option value="30d">Last 30 days</option>
+        <option value="year">This year</option>
+        <option value="all">All time</option>
+      </select>
+    </h2>
+    <div id="highlights" class="hl"></div>
+    <div class="scroll" style="margin-top:14px"><table id="board"></table></div>
+    <p class="msg" id="boardNote"></p>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Daily results <span class="spacer"></span><select id="gamePick" class="inline"></select></h2>
+      <div class="scroll"><table id="daily"></table></div>
+    </section>
+    <section class="card">
+      <h2>Form (rolling 5-game average)</h2>
+      <div class="chartbox"><canvas id="trend"></canvas></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Recent games</h2>
+    <div class="scroll"><table id="heat" class="heat"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>Player <span class="spacer"></span><select id="playerPick" class="inline"></select></h2>
+    <div id="playerStats" class="hl"></div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="chartbox"><canvas id="playerChart"></canvas></div>
+      <div class="scroll"><table id="playerRecent"></table></div>
+    </div>
+  </section>
+
+  <div class="row" style="justify-content:center">
+    <button class="ghost" id="refresh">Refresh</button>
+    <button class="ghost" id="exportCsv">Download CSV</button>
+  </div>
+</main>
+<footer>Scores from <a href="https://whentaken.com" style="color:inherit">whentaken.com</a></footer>
+
+<script>
+// ---------------------------------------------------------------
+// Settings. Put your Google Apps Script web app URL in API_URL.
+// Leave it blank to run in local test mode (saves to this browser only).
+// ---------------------------------------------------------------
+const CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbxhKlVcbdxR7kKDsOulzOpK179xjdEBjhcXxKWz43Qqo_hZq9UkpPMIBISvV0FSRWIlug/exec',
+  // To be ranked in a period, a player must have played at least this share of that period's games.
+  MIN_PLAY_SHARE: 0.4,
+  ROLLING: 5,
+  RECENT_GAMES: 15,
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const keyOf = name => String(name).trim().toLowerCase();
+const fmt0 = n => (n == null || isNaN(n)) ? '–' : Math.round(n).toLocaleString();
+const fmt1 = n => (n == null || isNaN(n)) ? '–' : (Math.round(n * 10) / 10).toLocaleString();
+const PALETTE = ['#e4572e', '#3b82f6', '#16a34a', '#a855f7', '#f59e0b', '#0ea5e9', '#db2777', '#65a30d', '#7c3aed', '#14b8a6', '#ea580c', '#64748b'];
+
+let entries = [];
+let nameMap = {};      // lowercase -> display name
+let trendChart = null, playerChart = null;
+
+// ---------- parsing ----------
+function parseResults(text) {
+  const blocks = text.split(/(?=#WhenTaken\s*#\d+)/i).filter(b => /#WhenTaken\s*#\d+/i.test(b));
+  return blocks.map(parseBlock);
+}
+
+function parseBlock(b) {
+  const h = b.match(/#WhenTaken\s*#(\d+)\s*\((\d{1,2})[./-](\d{1,2})[./-](\d{4})\)/i);
+  if (!h) throw new Error('Couldn\'t find the "#WhenTaken #123 (dd.mm.yyyy)" line.');
+  const game = +h[1];
+  const date = `${h[4]}-${h[3].padStart(2, '0')}-${h[2].padStart(2, '0')}`;
+  const rounds = [];
+  for (const line of b.split(/\r?\n/)) {
+    const d = line.match(/📍\s*([\d.,]+)\s*(K)?\s*(km|m)\b/u);
+    const p = line.match(/(\d+)\s*\/\s*200/);
+    if (!d || !p) continue;
+    let km = parseFloat(d[1].replace(/,/g, ''));
+    if (d[2]) km *= 1000;
+    if (d[3] === 'm') km /= 1000;
+    const y = line.match(/(\d+)\s*yrs?\b/i);
+    const medal = line.includes('🥇') ? 'g' : line.includes('🥈') ? 's' : line.includes('🥉') ? 'b' : '';
+    rounds.push({ km: Math.round(km * 1000) / 1000, yrs: y ? +y[1] : null, pts: +p[1], medal });
+  }
+  const s = b.match(/scored\s*(\d+)\s*\/\s*1000/i);
+  const score = s ? +s[1] : rounds.reduce((t, r) => t + r.pts, 0);
+  if (!s && !rounds.length) throw new Error(`Game #${game}: couldn't find a score.`);
+  if (score < 0 || score > 1000) throw new Error(`Game #${game}: score ${score} doesn't look right.`);
+  return { game, date, score, rounds };
+}
+
+// ---------- storage ----------
+const store = {
+  remote: !!CONFIG.API_URL,
+  async load() {
+    if (this.remote) {
+      const r = await fetch(CONFIG.API_URL + '?t=' + Date.now());
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'Load failed');
+      return j.entries;
+    }
+    try { return JSON.parse(localStorage.getItem('wt-entries') || '[]'); } catch { return []; }
+  },
+  async post(body) {
+    const r = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'Request failed');
+    return j;
+  },
+  async save(newEntries) {
+    if (this.remote) return this.post({ action: 'add', entries: newEntries });
+    const all = await this.load();
+    for (const e of newEntries) {
+      const i = all.findIndex(x => keyOf(x.player) === keyOf(e.player) && +x.game === +e.game);
+      if (i >= 0) all[i] = e; else all.push(e);
+    }
+    try { localStorage.setItem('wt-entries', JSON.stringify(all)); } catch {}
+  },
+  async remove(player, game) {
+    if (this.remote) return this.post({ action: 'delete', player, game });
+    const all = (await this.load()).filter(x => !(keyOf(x.player) === keyOf(player) && +x.game === +game));
+    try { localStorage.setItem('wt-entries', JSON.stringify(all)); } catch {}
+  },
+};
+
+function normalise(list) {
+  nameMap = {};
+  const out = [];
+  for (const raw of list) {
+    const player = String(raw.player || '').trim().replace(/\s+/g, ' ');
+    if (!player || !raw.game) continue;
+    let rounds = raw.rounds;
+    if (typeof rounds === 'string') { try { rounds = JSON.parse(rounds); } catch { rounds = []; } }
+    const e = { player, game: +raw.game, date: String(raw.date).slice(0, 10), score: +raw.score, rounds: Array.isArray(rounds) ? rounds : [], submitted: raw.submitted || '' };
+    out.push(e);
+  }
+  // most recent spelling of a name wins
+  out.sort((a, b) => String(a.submitted).localeCompare(String(b.submitted)));
+  for (const e of out) nameMap[keyOf(e.player)] = e.player;
+  for (const e of out) e.player = nameMap[keyOf(e.player)];
+  return out.sort((a, b) => a.game - b.game);
+}
+
+// ---------- dates ----------
+function isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function nice(dateIso, withDay = true) {
+  const d = new Date(dateIso + 'T00:00:00');
+  return d.toLocaleDateString('en-AU', withDay ? { weekday: 'short', day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short' });
+}
+function periodRange(p) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const y = t.getFullYear(), m = t.getMonth();
+  switch (p) {
+    case 'week': { const s = new Date(t); s.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return [isoLocal(s), '9999']; }
+    case 'month': return [isoLocal(new Date(y, m, 1)), '9999'];
+    case 'lastmonth': return [isoLocal(new Date(y, m - 1, 1)), isoLocal(new Date(y, m, 0))];
+    case '30d': { const s = new Date(t); s.setDate(t.getDate() - 29); return [isoLocal(s), '9999']; }
+    case 'year': return [`${y}-01-01`, '9999'];
+    default: return ['0000', '9999'];
+  }
+}
+
+// ---------- stats ----------
+const groupBy = (arr, f) => arr.reduce((m, x) => ((m[f(x)] ||= []).push(x), m), {});
+const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+const avg = a => a.length ? a.reduce((t, x) => t + x, 0) / a.length : null;
+
+function winnersByGame(list) {
+  const out = {};
+  for (const [g, es] of Object.entries(groupBy(list, e => e.game))) {
+    const max = Math.max(...es.map(e => e.score));
+    out[g] = es.filter(e => e.score === max).map(e => e.player);
+  }
+  return out;
+}
+
+function streaks(player) {
+  const games = [...new Set(entries.map(e => e.game))].sort((a, b) => a - b);
+  const mine = new Set(entries.filter(e => e.player === player).map(e => e.game));
+  let best = 0, run = 0;
+  for (const g of games) { run = mine.has(g) ? run + 1 : 0; best = Math.max(best, run); }
+  let cur = 0, i = games.length - 1;
+  if (i >= 0 && !mine.has(games[i])) i--;          // grace: today's not in yet
+  for (; i >= 0 && mine.has(games[i]); i--) cur++;
+  return { cur, best };
+}
+
+function playerStats(list, winners) {
+  const out = {};
+  for (const [p, es] of Object.entries(groupBy(list, e => e.player))) {
+    const rounds = es.flatMap(e => e.rounds);
+    const scores = es.map(e => e.score);
+    const yrs = rounds.map(r => r.yrs).filter(x => x != null);
+    out[p] = {
+      player: p, n: es.length, avg: avg(scores), best: Math.max(...scores), worst: Math.min(...scores),
+      wins: es.filter(e => winners[e.game]?.includes(p)).length,
+      medKm: median(rounds.map(r => r.km)), avgYrs: avg(yrs),
+      exactYrs: yrs.filter(y => y === 0).length, rounds: rounds.length,
+      golds: rounds.filter(r => r.medal === 'g').length,
+      ...streaks(p),
+    };
+  }
+  return out;
+}
+
+// ---------- rendering ----------
+function render() {
+  const players = [...new Set(entries.map(e => e.player))].sort((a, b) => a.localeCompare(b));
+  $('#players').innerHTML = players.map(p => `<option value="${esc(p)}">`).join('');
+  const games = [...new Set(entries.map(e => e.game))];
+  $('#subtitle').textContent = entries.length ? `${players.length} players · ${games.length} games · ${entries.length} scores` : 'No scores yet';
+  renderBoard();
+  renderGamePick(); renderDaily();
+  renderHeat();
+  renderPlayerPick(players); renderPlayer();
+}
+
+function renderBoard() {
+  const [from, to] = periodRange($('#period').value);
+  const list = entries.filter(e => e.date >= from && e.date <= to);
+  const gameCount = new Set(list.map(e => e.game)).size;
+  const winners = winnersByGame(list);
+  const stats = Object.values(playerStats(list, winners));
+  const minGames = Math.max(1, Math.ceil(CONFIG.MIN_PLAY_SHARE * gameCount));
+  stats.forEach(s => s.ok = s.n >= minGames);
+  stats.sort((a, b) => (b.ok - a.ok) || (b.avg - a.avg) || (b.n - a.n));
+
+  if (!list.length) {
+    $('#board').innerHTML = ''; $('#highlights').innerHTML = '';
+    $('#boardNote').textContent = 'No scores in this period yet.';
+    renderTrend(list); return;
+  }
+
+  let rank = 0;
+  $('#board').innerHTML = `<thead><tr><th>#</th><th>Player</th><th>Avg</th><th>Played</th><th>Wins</th><th>Best</th><th>Golds</th><th>Median dist</th><th>Avg yrs off</th><th>Streak</th></tr></thead><tbody>` +
+    stats.map(s => {
+      const r = s.ok ? ++rank : '';
+      const cls = r === 1 ? 'medal1' : r === 2 ? 'medal2' : r === 3 ? 'medal3' : '';
+      return `<tr class="${s.ok ? '' : 'ineligible'}"><td class="rank ${cls}">${r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : r}</td>
+        <td>${esc(s.player)}</td><td><b>${fmt0(s.avg)}</b></td><td>${s.n}/${gameCount}</td><td>${s.wins}</td><td>${s.best}</td>
+        <td>${s.golds}</td><td>${kmText(s.medKm)}</td><td>${fmt1(s.avgYrs)}</td><td>${s.cur}${s.cur >= 3 ? ' 🔥' : ''}</td></tr>`;
+    }).join('') + '</tbody>';
+  $('#boardNote').textContent = minGames > 1 ? `Ranked by average score. Needs ${minGames} of ${gameCount} games to be ranked; others shown in grey.` : 'Ranked by average score.';
+
+  // highlights
+  const top = [...list].sort((a, b) => b.score - a.score || a.game - b.game)[0];
+  let closest = null;
+  for (const e of list) for (const r of e.rounds) if (!closest || r.km < closest.km) closest = { ...r, player: e.player, game: e.game };
+  const mostWins = [...stats].sort((a, b) => b.wins - a.wins)[0];
+  const streak = Object.values(playerStats(entries, {})).sort((a, b) => b.cur - a.cur)[0];
+  $('#highlights').innerHTML = [
+    stat('Top score', top.score, `${esc(top.player)} · #${top.game}`),
+    closest ? stat('Closest pin', kmText(closest.km), `${esc(closest.player)} · #${closest.game}`) : '',
+    stat('Most daily wins', mostWins.wins, esc(mostWins.player)),
+    streak ? stat('Longest current streak', streak.cur, esc(streak.player)) : '',
+  ].join('');
+  renderTrend(list);
+}
+
+function stat(k, v, d = '') { return `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`; }
+function kmText(km) {
+  if (km == null) return '–';
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  if (km < 100) return `${fmt1(km)} km`;
+  return `${fmt0(km)} km`;
+}
+function chips(rounds) {
+  return `<span class="chips">${rounds.map(r => `<span class="chip ${r.medal}" title="${kmText(r.km)}, ${r.yrs ?? '?'} yrs off">${r.pts}</span>`).join('')}</span>`;
+}
+
+function renderGamePick() {
+  const games = [...new Map(entries.map(e => [e.game, e.date])).entries()].sort((a, b) => b[0] - a[0]);
+  const cur = $('#gamePick').value;
+  $('#gamePick').innerHTML = games.map(([g, d]) => `<option value="${g}">#${g} · ${nice(d)}</option>`).join('');
+  if (games.some(([g]) => String(g) === cur)) $('#gamePick').value = cur;
+}
+
+function renderDaily() {
+  const g = +$('#gamePick').value;
+  const list = entries.filter(e => e.game === g).sort((a, b) => b.score - a.score);
+  if (!list.length) { $('#daily').innerHTML = '<tr><td class="empty">No results yet.</td></tr>'; return; }
+  let prev = null, rank = 0;
+  $('#daily').innerHTML = `<thead><tr><th>#</th><th>Player</th><th>Score</th><th>Rounds</th><th></th></tr></thead><tbody>` +
+    list.map((e, i) => {
+      if (e.score !== prev) rank = i + 1; prev = e.score;
+      return `<tr><td class="rank">${rank === 1 ? '👑' : rank}</td><td>${esc(e.player)}</td><td><b>${e.score}</b></td><td>${chips(e.rounds)}</td>
+        <td><button class="x" title="Remove this score" data-del="${esc(e.player)}" data-game="${e.game}">×</button></td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+function renderHeat() {
+  const games = [...new Map(entries.map(e => [e.game, e.date])).entries()].sort((a, b) => b[0] - a[0]).slice(0, CONFIG.RECENT_GAMES).reverse();
+  if (!games.length) { $('#heat').innerHTML = '<tr><td class="empty">Nothing yet.</td></tr>'; return; }
+  const gameSet = new Set(games.map(([g]) => g));
+  const recent = entries.filter(e => gameSet.has(e.game));
+  const players = [...new Set(recent.map(e => e.player))];
+  const winners = winnersByGame(recent);
+  const lookup = Object.fromEntries(recent.map(e => [e.player + '|' + e.game, e.score]));
+  const lo = Math.min(...recent.map(e => e.score)), hi = Math.max(...recent.map(e => e.score));
+  players.sort((a, b) => avg(recent.filter(e => e.player === b).map(e => e.score)) - avg(recent.filter(e => e.player === a).map(e => e.score)));
+  $('#heat').innerHTML = `<thead><tr><th>Player</th><th></th>${games.map(([g, d]) => `<th title="#${g}" style="text-align:center">${nice(d, false)}</th>`).join('')}</tr></thead><tbody>` +
+    players.map(p => `<tr><td>${esc(p)}</td><td></td>${games.map(([g]) => {
+      const s = lookup[p + '|' + g];
+      if (s == null) return '<td class="cell miss">·</td>';
+      const t = hi === lo ? 1 : (s - lo) / (hi - lo);
+      const crown = winners[g]?.includes(p) ? ' 👑' : '';
+      return `<td class="cell" style="background:color-mix(in srgb, var(--heat-hi) ${Math.round(15 + t * 60)}%, transparent)">${s}${crown}</td>`;
+    }).join('')}</tr>`).join('') + '</tbody>';
+}
+
+function rolling(scores, n) { return scores.map((_, i) => avg(scores.slice(Math.max(0, i - n + 1), i + 1))); }
+
+function chartTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  return { ink: cs.getPropertyValue('--muted').trim(), line: cs.getPropertyValue('--line').trim() };
+}
+
+function renderTrend(list) {
+  const games = [...new Map(list.map(e => [e.game, e.date])).entries()].sort((a, b) => a[0] - b[0]);
+  const players = [...new Set(list.map(e => e.player))];
+  const th = chartTheme();
+  trendChart?.destroy();
+  if (!games.length) return;
+  trendChart = new Chart($('#trend'), {
+    type: 'line',
+    data: {
+      labels: games.map(([g, d]) => nice(d, false)),
+      datasets: players.map((p, i) => {
+        const mine = list.filter(e => e.player === p).sort((a, b) => a.game - b.game);
+        const roll = rolling(mine.map(e => e.score), CONFIG.ROLLING);
+        const at = Object.fromEntries(mine.map((e, j) => [e.game, roll[j]]));
+        return { label: p, data: games.map(([g]) => at[g] ?? null), spanGaps: true, borderColor: PALETTE[i % PALETTE.length], backgroundColor: PALETTE[i % PALETTE.length], tension: .3, pointRadius: 2, borderWidth: 2 };
+      }),
+    },
+    options: chartOpts(th),
+  });
+}
+
+function chartOpts(th) {
+  return {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false },
+    plugins: { legend: { labels: { color: th.ink, boxWidth: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${Math.round(c.parsed.y)}` } } },
+    scales: { x: { ticks: { color: th.ink, maxRotation: 0, autoSkip: true }, grid: { color: th.line } }, y: { ticks: { color: th.ink }, grid: { color: th.line } } },
+  };
+}
+
+function renderPlayerPick(players) {
+  const cur = $('#playerPick').value || localStorage.getItem('wt-name') || players[0];
+  $('#playerPick').innerHTML = players.map(p => `<option>${esc(p)}</option>`).join('');
+  const match = players.find(p => keyOf(p) === keyOf(cur || ''));
+  if (match) $('#playerPick').value = match;
+}
+
+function renderPlayer() {
+  const p = $('#playerPick').value;
+  const mine = entries.filter(e => e.player === p).sort((a, b) => a.game - b.game);
+  playerChart?.destroy();
+  if (!mine.length) { $('#playerStats').innerHTML = ''; $('#playerRecent').innerHTML = ''; return; }
+  const s = playerStats(entries, winnersByGame(entries))[p];
+  const allRounds = mine.flatMap(e => e.rounds);
+  const bestRound = [...allRounds].sort((a, b) => a.km - b.km)[0];
+  $('#playerStats').innerHTML = [
+    stat('Games played', s.n),
+    stat('Average', fmt0(s.avg), `best ${s.best} · worst ${s.worst}`),
+    stat('Daily wins', s.wins, `${Math.round(100 * s.wins / s.n)}% of games played`),
+    stat('Median distance', kmText(s.medKm), bestRound ? `closest ever ${kmText(bestRound.km)}` : ''),
+    stat('Avg years off', fmt1(s.avgYrs), s.rounds ? `exact year ${Math.round(100 * s.exactYrs / s.rounds)}% of rounds` : ''),
+    stat('Gold rounds', s.golds, s.rounds ? `${Math.round(100 * s.golds / s.rounds)}% of rounds` : ''),
+    stat('Streak', s.cur, `best ${s.best}`),
+  ].join('');
+  $('#playerRecent').innerHTML = `<thead><tr><th>Game</th><th>Date</th><th>Score</th><th>Rounds</th></tr></thead><tbody>` +
+    mine.slice(-10).reverse().map(e => `<tr><td>#${e.game}</td><td>${nice(e.date)}</td><td><b>${e.score}</b></td><td>${chips(e.rounds)}</td></tr>`).join('') + '</tbody>';
+  const th = chartTheme();
+  playerChart = new Chart($('#playerChart'), {
+    type: 'line',
+    data: {
+      labels: mine.map(e => nice(e.date, false)),
+      datasets: [
+        { label: 'Score', data: mine.map(e => e.score), borderColor: '#94a3b8', backgroundColor: '#94a3b8', pointRadius: 2, borderWidth: 1, tension: .2 },
+        { label: `${CONFIG.ROLLING}-game avg`, data: rolling(mine.map(e => e.score), CONFIG.ROLLING), borderColor: '#e4572e', backgroundColor: '#e4572e', pointRadius: 0, borderWidth: 2.5, tension: .3 },
+      ],
+    },
+    options: chartOpts(th),
+  });
+}
+
+// ---------- submit ----------
+let parsed = [];
+function updatePreview() {
+  const text = $('#paste').value.trim();
+  parsed = [];
+  if (!text) { $('#preview').className = 'msg'; $('#preview').textContent = 'Paste a result to see what will be saved.'; return checkReady(); }
+  try {
+    parsed = parseResults(text);
+    if (!parsed.length) throw new Error('No #WhenTaken result found in the text.');
+    const name = $('#name').value.trim();
+    $('#preview').className = 'msg';
+    $('#preview').innerHTML = parsed.map(r => {
+      const exists = name && entries.some(e => keyOf(e.player) === keyOf(name) && e.game === r.game);
+      return `<div style="margin-bottom:8px"><b>#${r.game}</b> · ${nice(r.date)} · <b>${r.score}</b> pts<br>${chips(r.rounds)}${exists ? '<br><span class="msg err">You already have a score for this game. Submitting will replace it.</span>' : ''}</div>`;
+    }).join('');
+  } catch (err) {
+    parsed = [];
+    $('#preview').className = 'msg err'; $('#preview').textContent = err.message;
+  }
+  checkReady();
+}
+function checkReady() { $('#submit').disabled = !(parsed.length && $('#name').value.trim()); }
+
+async function submit() {
+  const name = $('#name').value.trim().replace(/\s+/g, ' ');
+  const player = nameMap[keyOf(name)] || name;
+  const now = new Date().toISOString();
+  const batch = parsed.map(r => ({ player, ...r, submitted: now }));
+  $('#submit').disabled = true;
+  $('#submitMsg').className = 'msg'; $('#submitMsg').textContent = 'Saving…';
+  try {
+    await store.save(batch);
+    try { localStorage.setItem('wt-name', player); } catch {}
+    $('#paste').value = ''; parsed = [];
+    $('#submitMsg').className = 'msg ok'; $('#submitMsg').textContent = batch.length > 1 ? `Saved ${batch.length} games.` : 'Saved.';
+    await reload();
+    $('#gamePick').value = String(batch[batch.length - 1].game); renderDaily();
+    updatePreview();
+  } catch (err) {
+    $('#submitMsg').className = 'msg err'; $('#submitMsg').textContent = 'Couldn\'t save: ' + err.message;
+    checkReady();
+  }
+}
+
+async function reload() {
+  try {
+    entries = normalise(await store.load());
+    render();
+  } catch (err) {
+    $('#subtitle').textContent = 'Couldn\'t load scores: ' + err.message;
+  }
+}
+
+function exportCsv() {
+  const head = ['game', 'date', 'player', 'score', ...[1, 2, 3, 4, 5].flatMap(i => [`r${i}_pts`, `r${i}_km`, `r${i}_yrs`])];
+  const rows = entries.map(e => [e.game, e.date, e.player, e.score, ...[0, 1, 2, 3, 4].flatMap(i => { const r = e.rounds[i] || {}; return [r.pts ?? '', r.km ?? '', r.yrs ?? '']; })]);
+  const csv = [head, ...rows].map(r => r.map(v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `whentaken-scores-${isoLocal(new Date())}.csv`;
+  a.click();
+}
+
+// ---------- wire up ----------
+try { $('#name').value = localStorage.getItem('wt-name') || ''; } catch {}
+if (!store.remote) {
+  $('#modeBanner').hidden = false;
+  $('#modeBanner').innerHTML = '<b>Test mode:</b> no backend set, so scores are only saved in this browser. Set <code>API_URL</code> in the CONFIG block of index.html to share scores with everyone.';
+}
+$('#paste').addEventListener('input', updatePreview);
+$('#name').addEventListener('input', updatePreview);
+$('#submit').addEventListener('click', submit);
+$('#period').addEventListener('change', renderBoard);
+$('#gamePick').addEventListener('change', renderDaily);
+$('#playerPick').addEventListener('change', renderPlayer);
+$('#refresh').addEventListener('click', reload);
+$('#exportCsv').addEventListener('click', exportCsv);
+$('#daily').addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-del]');
+  if (!b) return;
+  if (!confirm(`Remove ${b.dataset.del}'s score for #${b.dataset.game}?`)) return;
+  try { await store.remove(b.dataset.del, +b.dataset.game); await reload(); } catch (err) { alert('Couldn\'t remove: ' + err.message); }
+});
+reload();
+</script>
+</body>
+</html>
